@@ -39,10 +39,10 @@
   .panel{ position:relative; overflow:hidden; background:#000; }
   .panel canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
 
-  .p-top{    grid-column:2; grid-row:1; clip-path:polygon(50% 100%, 0 0, 100% 0); }
-  .p-bottom{ grid-column:2; grid-row:3; clip-path:polygon(50% 0%, 0 100%, 100% 100%); }
-  .p-left{   grid-column:1; grid-row:2; clip-path:polygon(100% 50%, 0 0, 0 100%); }
-  .p-right{  grid-column:3; grid-row:2; clip-path:polygon(0 50%, 100% 0, 100% 100%); }
+  .p-top{    grid-column:2; grid-row:1; clip-path:polygon(0 0, 100% 0, 63% 100%, 37% 100%); }
+  .p-bottom{ grid-column:2; grid-row:3; clip-path:polygon(0 100%, 100% 100%, 63% 0%, 37% 0%); }
+  .p-left{   grid-column:1; grid-row:2; clip-path:polygon(0 0, 0 100%, 100% 63%, 100% 37%); }
+  .p-right{  grid-column:3; grid-row:2; clip-path:polygon(100% 0, 100% 100%, 0% 63%, 0% 37%); }
   .p-center{ grid-column:2; grid-row:2; display:flex; align-items:center; justify-content:center; pointer-events:none; }
 
   .p-top canvas{    transform:rotate(0deg); }
@@ -51,7 +51,7 @@
   .p-right canvas{  transform:rotate(270deg); }
 
   .guide{
-    width:60%; height:60%;
+    width:44%; height:44%;
     border:1px dashed rgba(124,249,255,0.35);
     clip-path:polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
     display:flex; align-items:center; justify-content:center;
@@ -325,13 +325,13 @@
         </ol>
         <svg class="net-diagram" width="100%" height="90" viewBox="0 0 220 90">
           <g stroke="#7cf9ff" stroke-width="1" fill="none" opacity="0.8">
-            <polygon points="110,10 150,80 70,80"/>
-            <polygon points="150,80 190,10 110,10" opacity="0.5"/>
-            <polygon points="70,80 30,10 110,10" opacity="0.5"/>
+            <polygon points="95,10 125,10 145,80 75,80"/>
+            <polygon points="125,10 190,25 150,80 145,80" opacity="0.5"/>
+            <polygon points="95,10 30,25 70,80 75,80" opacity="0.5"/>
           </g>
           <g stroke="#b98bff" stroke-width="1" stroke-dasharray="3 3">
-            <line x1="110" y1="10" x2="70" y2="80"/>
-            <line x1="110" y1="10" x2="150" y2="80"/>
+            <line x1="95" y1="10" x2="75" y2="80"/>
+            <line x1="125" y1="10" x2="145" y2="80"/>
           </g>
         </svg>
       </details>
