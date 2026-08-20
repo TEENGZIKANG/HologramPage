@@ -30,7 +30,7 @@
   }
   .stage{
     position:relative;
-    width:min(92vmin, 900px);
+    width:92vmin;
     aspect-ratio:1/1;
     display:grid;
     grid-template-columns:1fr 1fr 1fr;
@@ -184,6 +184,22 @@
 </head>
 <body>
 
+  <div id="fileWarning" style="display:none; position:fixed; inset:0; z-index:9999; background:#020203; color:#e7ecf3; font-family:'JetBrains Mono',monospace; padding:28px; overflow-y:auto; line-height:1.6;">
+    <h2 style="color:#7cf9ff; font-size:15px; letter-spacing:.03em;">Open this over http(s), not as a local file</h2>
+    <p style="font-size:13px; color:#c3c9d1;">This app loads Three.js as an ES module, which browsers block when a page is opened directly from disk (<code>file://</code>). Host it somewhere and open that link instead:</p>
+    <ul style="font-size:13px; color:#c3c9d1; padding-left:18px;">
+      <li style="margin-bottom:8px;"><b style="color:#e7ecf3;">Netlify Drop</b> — go to netlify.com/drop on a computer, drag this file in, open the link it gives you on your phone.</li>
+      <li style="margin-bottom:8px;"><b style="color:#e7ecf3;">GitHub Pages</b> — push this file to a repo and enable Pages.</li>
+      <li style="margin-bottom:8px;"><b style="color:#e7ecf3;">Termux (Android)</b> — <code>pkg install python</code>, then <code>python -m http.server</code> in this file's folder, then open <code>http://localhost:8000/</code> in Chrome.</li>
+      <li style="margin-bottom:8px;"><b style="color:#e7ecf3;">Same Wi-Fi as a PC</b> — run a local server on the PC, open <code>http://&lt;PC's-IP&gt;:8000</code> on your phone.</li>
+    </ul>
+  </div>
+  <script>
+    if (location.protocol === 'file:') {
+      document.getElementById('fileWarning').style.display = 'block';
+    }
+  </script>
+
   <div class="stage-wrap">
     <div class="stage" id="stage">
       <div class="panel p-top"><canvas id="cv-top"></canvas></div>
@@ -283,6 +299,16 @@
     <div class="section">
       <h2>Display</h2>
       <div class="field">
+        <div class="field-row"><label>Hologram size</label><span class="val" id="hsizeVal">92%</span></div>
+        <input type="range" id="hsize" min="40" max="100" step="1" value="92" />
+        <p class="hint">Match this to your physical pyramid's base — measure the base width and scale the diamond below until it lines up.</p>
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Exposure</label><span class="val" id="exposureVal">1.20</span></div>
+        <input type="range" id="exposure" min="0.2" max="3" step="0.05" value="1.2" />
+        <p class="hint">Raise this if the model looks dim with glow mode off.</p>
+      </div>
+      <div class="field">
         <button class="btn primary" id="fsBtn">Enter fullscreen showcase</button>
       </div>
     </div>
@@ -333,14 +359,19 @@ const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
 camera.position.set(0, 0, 6);
 camera.lookAt(0, 0, 0);
 
-const hemi = new THREE.HemisphereLight(0x88bbff, 0x110022, 0.55);
+const hemi = new THREE.HemisphereLight(0x88bbff, 0x110022, 1.1);
 scene.add(hemi);
-const key = new THREE.PointLight(0x7cf9ff, 1.6, 20);
+const ambient = new THREE.AmbientLight(0xffffff, 1.4);
+scene.add(ambient);
+const key = new THREE.PointLight(0x7cf9ff, 16, 25);
 key.position.set(3, 3, 4);
 scene.add(key);
-const rim = new THREE.PointLight(0xb98bff, 1.2, 20);
+const rim = new THREE.PointLight(0xb98bff, 11, 25);
 rim.position.set(-3, -2, -3);
 scene.add(rim);
+const fill = new THREE.DirectionalLight(0xffffff, 0.8);
+fill.position.set(0, 2, 6);
+scene.add(fill);
 
 const modelPivot = new THREE.Group();
 scene.add(modelPivot);
@@ -361,6 +392,7 @@ const state = {
   scale: 1,
   wireframe: true,
   glow: 1.0,
+  exposure: 1.2,
   colorA: new THREE.Color(0x7cf9ff),
   colorB: new THREE.Color(0xb98bff)
 };
@@ -422,8 +454,8 @@ function applyMaterialMode(){
       o.material = o.userData.origMaterial;
     }
   });
-  key.color.copy(state.colorA); key.intensity = 1.2 + state.glow*0.8;
-  rim.color.copy(state.colorB); rim.intensity = 0.9 + state.glow*0.6;
+  key.color.copy(state.colorA); key.intensity = 14 + state.glow*10;
+  rim.color.copy(state.colorB); rim.intensity = 9 + state.glow*7;
 }
 
 /* ---------------- Animation clip registry ---------------- */
@@ -551,6 +583,9 @@ Object.entries(canvases).forEach(([k, cv])=>{
   const r = new THREE.WebGLRenderer({ canvas:cv, antialias:true, alpha:true });
   r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   r.setClearColor(0x000000, 0);
+  r.toneMapping = THREE.ACESFilmicToneMapping;
+  r.toneMappingExposure = state.exposure;
+  if('outputColorSpace' in r) r.outputColorSpace = THREE.SRGBColorSpace;
   renderers[k] = r;
 });
 
@@ -561,6 +596,12 @@ function resizeRenderers(){
 }
 window.addEventListener('resize', resizeRenderers);
 resizeRenderers();
+
+const stageEl = document.getElementById('stage');
+function setHologramSize(pct){
+  stageEl.style.width = pct + 'vmin';
+  requestAnimationFrame(resizeRenderers);
+}
 
 /* ---------------- Animation loop ---------------- */
 const clock = new THREE.Clock();
@@ -587,6 +628,12 @@ $('wireToggle').addEventListener('change', e=>{ state.wireframe = e.target.check
 $('colorA').addEventListener('input', e=>{ state.colorA.set(e.target.value); applyMaterialMode(); });
 $('colorB').addEventListener('input', e=>{ state.colorB.set(e.target.value); applyMaterialMode(); });
 $('guideToggle').addEventListener('change', e=>{ $('guide').style.display = e.target.checked ? 'flex' : 'none'; });
+$('hsize').addEventListener('input', e=>{ $('hsizeVal').textContent = e.target.value + '%'; setHologramSize(parseFloat(e.target.value)); });
+$('exposure').addEventListener('input', e=>{
+  state.exposure = parseFloat(e.target.value);
+  $('exposureVal').textContent = state.exposure.toFixed(2);
+  Object.values(renderers).forEach(r=> r.toneMappingExposure = state.exposure);
+});
 
 $('uploadBtn').addEventListener('click', ()=> $('fileInput').click());
 $('fileInput').addEventListener('change', e=>{
