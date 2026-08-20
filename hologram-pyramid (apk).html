@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Pyramid Hologram Projector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#020203;
+    --panel-bg: rgba(9,11,16,0.86);
+    --panel-border: rgba(124,249,255,0.16);
+    --accent: #7cf9ff;
+    --accent-2: #b98bff;
+    --text: #e7ecf3;
+    --muted: #7d8794;
+    --line: rgba(231,236,243,0.08);
+    --mono: 'JetBrains Mono', ui-monospace, monospace;
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; margin:0; background:#000; overflow:hidden; font-family:var(--sans); color:var(--text); }
+
+  /* ---------- Stage ---------- */
+  .stage-wrap{
+    position:fixed; inset:0; background:#000;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .stage{
+    position:relative;
+    width:min(92vmin, 900px);
+    aspect-ratio:1/1;
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    grid-template-rows:1fr 1fr 1fr;
+  }
+  .panel{ position:relative; overflow:hidden; background:#000; }
+  .panel canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  .p-top{    grid-column:2; grid-row:1; clip-path:polygon(50% 100%, 0 0, 100% 0); }
+  .p-bottom{ grid-column:2; grid-row:3; clip-path:polygon(50% 0%, 0 100%, 100% 100%); }
+  .p-left{   grid-column:1; grid-row:2; clip-path:polygon(100% 50%, 0 0, 0 100%); }
+  .p-right{  grid-column:3; grid-row:2; clip-path:polygon(0 50%, 100% 0, 100% 100%); }
+  .p-center{ grid-column:2; grid-row:2; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+
+  .p-top canvas{    transform:rotate(0deg); }
+  .p-bottom canvas{ transform:rotate(180deg); }
+  .p-left canvas{   transform:rotate(90deg); }
+  .p-right canvas{  transform:rotate(270deg); }
+
+  .guide{
+    width:60%; height:60%;
+    border:1px dashed rgba(124,249,255,0.35);
+    clip-path:polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    display:flex; align-items:center; justify-content:center;
+    transition:opacity .6s ease;
+  }
+  .guide span{
+    font-family:var(--mono); font-size:10px; letter-spacing:.08em;
+    color:var(--muted); text-align:center; text-transform:uppercase;
+  }
+  body.fullscreen-active .guide{ opacity:0; }
+
+  /* ---------- Dock toggle ---------- */
+  .dock-toggle{
+    position:fixed; top:16px; right:16px; z-index:30;
+    width:40px; height:40px; border-radius:50%;
+    background:var(--panel-bg); border:1px solid var(--panel-border);
+    color:var(--accent); font-family:var(--mono); font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; backdrop-filter:blur(6px);
+  }
+  .dock-toggle:hover{ border-color:var(--accent); }
+
+  /* ---------- Control dock ---------- */
+  .dock{
+    position:fixed; z-index:20;
+    top:0; right:0; height:100%; width:340px; max-width:88vw;
+    background:var(--panel-bg); border-left:1px solid var(--panel-border);
+    backdrop-filter:blur(10px);
+    transform:translateX(0);
+    transition:transform .35s cubic-bezier(.6,0,.3,1);
+    overflow-y:auto;
+    padding:20px 18px 100px;
+  }
+  .dock.collapsed{ transform:translateX(100%); }
+
+  .brand{ display:flex; align-items:center; gap:10px; margin-bottom:18px; }
+  .brand svg{ flex:none; }
+  .brand h1{ font-family:var(--mono); font-size:13px; letter-spacing:.06em; margin:0; text-transform:uppercase; }
+  .brand p{ margin:2px 0 0; font-size:11px; color:var(--muted); font-family:var(--mono); }
+
+  .section{ margin-bottom:22px; padding-bottom:18px; border-bottom:1px solid var(--line); }
+  .section:last-child{ border-bottom:none; }
+  .section h2{
+    font-family:var(--mono); font-size:10px; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--accent); margin:0 0 12px;
+  }
+
+  .field{ margin-bottom:14px; }
+  .field:last-child{ margin-bottom:0; }
+  .field-row{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .field label{ font-size:12px; color:var(--text); }
+  .field .val{ font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .hint{ font-size:11px; color:var(--muted); line-height:1.5; margin:6px 0 0; }
+
+  input[type=range]{
+    -webkit-appearance:none; width:100%; height:2px; background:var(--line); outline:none; border-radius:2px;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 8px rgba(124,249,255,0.7);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px; height:13px; border-radius:50%; border:none;
+    background:var(--accent); cursor:pointer; box-shadow:0 0 8px rgba(124,249,255,0.7);
+  }
+
+  select{
+    width:100%; padding:8px 10px; border-radius:6px;
+    background:rgba(255,255,255,0.03); border:1px solid var(--panel-border); color:var(--text);
+    font-family:var(--sans); font-size:12.5px; cursor:pointer;
+  }
+  select:focus{ outline:none; border-color:var(--accent); }
+
+  .btn{
+    width:100%; padding:10px 12px; border-radius:6px;
+    background:transparent; border:1px solid var(--panel-border); color:var(--text);
+    font-family:var(--sans); font-size:12.5px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:border-color .2s, background .2s;
+  }
+  .btn:hover{ border-color:var(--accent); background:rgba(124,249,255,0.06); }
+  .btn.primary{ background:rgba(124,249,255,0.1); border-color:var(--accent); color:var(--accent); }
+  .btn + .btn{ margin-top:8px; }
+  input[type=file]{ display:none; }
+
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; }
+  .switch{ position:relative; width:36px; height:20px; flex:none; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .switch .slider{
+    position:absolute; inset:0; background:var(--line); border-radius:20px; cursor:pointer; transition:.2s;
+  }
+  .switch .slider::before{
+    content:''; position:absolute; width:14px; height:14px; left:3px; top:3px;
+    background:var(--muted); border-radius:50%; transition:.2s;
+  }
+  .switch input:checked + .slider{ background:rgba(124,249,255,0.25); }
+  .switch input:checked + .slider::before{ transform:translateX(16px); background:var(--accent); box-shadow:0 0 6px var(--accent); }
+
+  .swatch-row{ display:flex; gap:8px; }
+  .swatch-row input[type=color]{
+    width:32px; height:28px; border:1px solid var(--panel-border); border-radius:4px; background:none; padding:0; cursor:pointer;
+  }
+
+  details.instructions summary{
+    font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--accent); cursor:pointer; list-style:none; display:flex; justify-content:space-between; align-items:center;
+  }
+  details.instructions summary::-webkit-details-marker{ display:none; }
+  details.instructions summary::after{ content:'+'; font-size:14px; }
+  details.instructions[open] summary::after{ content:'\2013'; }
+  .instructions ol{ margin:12px 0 0; padding-left:18px; font-size:12px; color:var(--muted); line-height:1.6; }
+  .instructions ol li{ margin-bottom:8px; }
+  .instructions ol li b{ color:var(--text); font-weight:600; }
+  .net-diagram{ margin-top:14px; }
+
+  .status{
+    font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:8px; min-height:14px;
+  }
+  .status.error{ color:#ff8a8a; }
+
+  ::-webkit-scrollbar{ width:6px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(124,249,255,0.2); border-radius:4px; }
+
+  @media (max-width:640px){
+    .dock{ width:100%; max-width:100%; top:auto; bottom:0; height:auto; max-height:78vh; border-left:none; border-top:1px solid var(--panel-border); border-radius:16px 16px 0 0; }
+    .dock.collapsed{ transform:translateY(100%); }
+    .dock-toggle{ bottom:16px; top:auto; right:16px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="stage-wrap">
+    <div class="stage" id="stage">
+      <div class="panel p-top"><canvas id="cv-top"></canvas></div>
+      <div class="panel p-left"><canvas id="cv-left"></canvas></div>
+      <div class="panel p-center"><div class="guide" id="guide"><span>Pyramid&nbsp;center<br/>— place tip here —</span></div></div>
+      <div class="panel p-right"><canvas id="cv-right"></canvas></div>
+      <div class="panel p-bottom"><canvas id="cv-bottom"></canvas></div>
+    </div>
+  </div>
+
+  <button class="dock-toggle" id="dockToggle" title="Toggle controls">⚙</button>
+
+  <div class="dock" id="dock">
+    <div class="brand">
+      <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+        <polygon points="13,2 24,20 2,20" stroke="#7cf9ff" stroke-width="1.2" fill="none"/>
+        <polygon points="13,2 18,20 8,20" stroke="#b98bff" stroke-width="1" fill="none" opacity="0.7"/>
+      </svg>
+      <div>
+        <h1>Hologram Projector</h1>
+        <p>4-face pyramid renderer · glTF / FBX</p>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Model</h2>
+      <div class="field">
+        <button class="btn primary" id="uploadBtn">Upload character (.glb / .gltf / .fbx)</button>
+        <input type="file" id="fileInput" accept=".glb,.gltf,.fbx" />
+        <button class="btn" id="sampleBtn">Load sample animated model (online)</button>
+        <button class="btn" id="resetBtn">Reset to placeholder</button>
+      </div>
+      <div class="status" id="status">Showing default placeholder — upload a model to replace it.</div>
+    </div>
+
+    <div class="section">
+      <h2>Animation</h2>
+      <div class="field">
+        <div class="field-row"><label>Clip</label></div>
+        <select id="clipSelect"><option value="">— none —</option></select>
+      </div>
+      <div class="field toggle-row">
+        <label>Playing</label>
+        <label class="switch"><input type="checkbox" id="playToggle" /><span class="slider"></span></label>
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Playback speed</label><span class="val" id="animSpeedVal">1.00</span></div>
+        <input type="range" id="animSpeed" min="0" max="2.5" step="0.05" value="1" />
+      </div>
+      <div class="field">
+        <button class="btn" id="animUploadBtn">Add Mixamo animation (.fbx)</button>
+        <input type="file" id="animFileInput" accept=".fbx" multiple />
+      </div>
+      <div class="status" id="animStatus">No animation loaded.</div>
+      <p class="hint">On mixamo.com: export your character once <b>with skin</b>, then export extra moves <b>without skin</b> (FBX). Add those files here — they retarget onto the character already loaded, since Mixamo rigs share bone names.</p>
+    </div>
+
+    <div class="section">
+      <h2>Pyramid motion</h2>
+      <div class="field">
+        <div class="field-row"><label>Spin speed</label><span class="val" id="speedVal">0.6</span></div>
+        <input type="range" id="speed" min="-2" max="2" step="0.05" value="0.6" />
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Tilt</label><span class="val" id="tiltVal">10°</span></div>
+        <input type="range" id="tilt" min="-30" max="30" step="1" value="10" />
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Appearance</h2>
+      <div class="field">
+        <div class="field-row"><label>Scale</label><span class="val" id="scaleVal">1.00</span></div>
+        <input type="range" id="scale" min="0.4" max="2.2" step="0.02" value="1" />
+      </div>
+      <div class="field toggle-row">
+        <label>Wireframe glow mode</label>
+        <label class="switch"><input type="checkbox" id="wireToggle" checked /><span class="slider"></span></label>
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Glow intensity</label><span class="val" id="glowVal">1.0</span></div>
+        <input type="range" id="glow" min="0" max="2" step="0.05" value="1" />
+      </div>
+      <div class="field">
+        <div class="field-row"><label>Colors</label></div>
+        <div class="swatch-row">
+          <input type="color" id="colorA" value="#7cf9ff" title="Primary glow" />
+          <input type="color" id="colorB" value="#b98bff" title="Secondary glow" />
+        </div>
+      </div>
+      <div class="field toggle-row">
+        <label>Show center guide</label>
+        <label class="switch"><input type="checkbox" id="guideToggle" checked /><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Display</h2>
+      <div class="field">
+        <button class="btn primary" id="fsBtn">Enter fullscreen showcase</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <details class="instructions">
+        <summary>Build the physical pyramid</summary>
+        <ol>
+          <li><b>Material.</b> Cut 4 identical trapezoids from a clear CD case, report cover, or overhead-projector transparency.</li>
+          <li><b>Proportions.</b> A working ratio: top edge ≈ 1 cm, bottom edge ≈ 6 cm, height ≈ 3.5 cm, sides angled at 45°. Scale it up for tablets, down for phones.</li>
+          <li><b>Assemble.</b> Tape the four trapezoids edge-to-edge into a truncated pyramid (frustum), narrow opening at the top.</li>
+          <li><b>Place.</b> Set it wide-edge-down, centered on the diamond guide in the middle of the screen.</li>
+          <li><b>View.</b> Dim the room, tap "Enter fullscreen showcase," and look at each face from eye level.</li>
+        </ol>
+        <svg class="net-diagram" width="100%" height="90" viewBox="0 0 220 90">
+          <g stroke="#7cf9ff" stroke-width="1" fill="none" opacity="0.8">
+            <polygon points="110,10 150,80 70,80"/>
+            <polygon points="150,80 190,10 110,10" opacity="0.5"/>
+            <polygon points="70,80 30,10 110,10" opacity="0.5"/>
+          </g>
+          <g stroke="#b98bff" stroke-width="1" stroke-dasharray="3 3">
+            <line x1="110" y1="10" x2="70" y2="80"/>
+            <line x1="110" y1="10" x2="150" y2="80"/>
+          </g>
+        </svg>
+      </details>
+    </div>
+  </div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+/* ---------------- Scene shared across all 4 viewports ---------------- */
+const scene = new THREE.Scene();
+scene.background = null;
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+camera.position.set(0, 0, 6);
+camera.lookAt(0, 0, 0);
+
+const hemi = new THREE.HemisphereLight(0x88bbff, 0x110022, 0.55);
+scene.add(hemi);
+const key = new THREE.PointLight(0x7cf9ff, 1.6, 20);
+key.position.set(3, 3, 4);
+scene.add(key);
+const rim = new THREE.PointLight(0xb98bff, 1.2, 20);
+rim.position.set(-3, -2, -3);
+scene.add(rim);
+
+const modelPivot = new THREE.Group();
+scene.add(modelPivot);
+const tiltGroup = new THREE.Group();
+tiltGroup.add(modelPivot);
+scene.add(tiltGroup);
+
+let currentObject = null;   // wrapper group holding the loaded/placeholder mesh root
+let meshList = [];          // all meshes in the current model, for material swap
+let mixer = null;           // THREE.AnimationMixer bound to currentObject
+let clips = [];             // {id, name, clip}
+let currentAction = null;
+let animSpeed = 1;
+
+const state = {
+  speed: 0.6,
+  tiltDeg: 10,
+  scale: 1,
+  wireframe: true,
+  glow: 1.0,
+  colorA: new THREE.Color(0x7cf9ff),
+  colorB: new THREE.Color(0xb98bff)
+};
+
+function clearModel(){
+  if(currentObject){
+    modelPivot.remove(currentObject);
+    currentObject.traverse(o=>{
+      if(o.geometry) o.geometry.dispose();
+      if(o.userData && (o.userData.origMaterial || o.userData.wireMaterial)){
+        if(o.userData.origMaterial){
+          const m = o.userData.origMaterial;
+          (Array.isArray(m)?m:[m]).forEach(mm=> mm && mm.dispose && mm.dispose());
+        }
+        if(o.userData.wireMaterial) o.userData.wireMaterial.dispose();
+      } else if(o.material){
+        const mats = Array.isArray(o.material)?o.material:[o.material];
+        mats.forEach(m=> m && m.dispose && m.dispose());
+      }
+    });
+    currentObject = null;
+  }
+  meshList = [];
+}
+
+function normalizeAndAdd(root){
+  clearModel();
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3(); box.getSize(size);
+  const center = new THREE.Vector3(); box.getCenter(center);
+  root.position.sub(center);
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+  const norm = 2.4 / maxDim;
+  const wrapper = new THREE.Group();
+  wrapper.add(root);
+  wrapper.scale.setScalar(norm);
+  currentObject = wrapper;
+  modelPivot.add(currentObject);
+
+  root.traverse(o=>{
+    if(o.isMesh){
+      o.userData.origMaterial = o.material;
+      o.userData.wireMaterial = new THREE.MeshBasicMaterial({
+        color: state.colorA, wireframe:true, transparent:true, opacity:0.8
+      });
+      meshList.push(o);
+    }
+  });
+  applyMaterialMode();
+}
+
+function applyMaterialMode(){
+  meshList.forEach(o=>{
+    if(state.wireframe){
+      o.userData.wireMaterial.color.copy(state.colorA);
+      o.userData.wireMaterial.opacity = Math.min(1, 0.5 + state.glow*0.35);
+      o.material = o.userData.wireMaterial;
+    } else {
+      o.material = o.userData.origMaterial;
+    }
+  });
+  key.color.copy(state.colorA); key.intensity = 1.2 + state.glow*0.8;
+  rim.color.copy(state.colorB); rim.intensity = 0.9 + state.glow*0.6;
+}
+
+/* ---------------- Animation clip registry ---------------- */
+function resetClips(){
+  clips = [];
+  currentAction = null;
+  refreshClipSelect();
+  setAnimStatus('No animation loaded.');
+}
+
+function addClips(newClips, sourceLabel){
+  if(!newClips || !newClips.length) return;
+  newClips.forEach((c,i)=>{
+    clips.push({ id: clips.length, name: c.name ? c.name : (sourceLabel + ' ' + (i+1)), clip: c });
+  });
+  refreshClipSelect();
+  playClip(clips[clips.length-1].id);
+}
+
+function refreshClipSelect(){
+  const sel = document.getElementById('clipSelect');
+  sel.innerHTML = '<option value="">— none —</option>' +
+    clips.map(c=>'<option value="'+c.id+'">'+c.name+'</option>').join('');
+}
+
+function playClip(id){
+  if(!mixer) return;
+  const entry = clips.find(c=> c.id === Number(id));
+  if(currentAction){ currentAction.stop(); currentAction = null; }
+  document.getElementById('clipSelect').value = entry ? entry.id : '';
+  if(!entry) return;
+  currentAction = mixer.clipAction(entry.clip);
+  currentAction.reset();
+  currentAction.setLoop(THREE.LoopRepeat);
+  currentAction.timeScale = animSpeed;
+  currentAction.play();
+  document.getElementById('playToggle').checked = true;
+  setAnimStatus('Playing "' + entry.name + '".');
+}
+
+function setAnimStatus(msg, isError){
+  const el = document.getElementById('animStatus');
+  el.textContent = msg;
+  el.classList.toggle('error', !!isError);
+}
+
+/* ---------------- Model loading (shared finalize step) ---------------- */
+function finalizeModel(root, embeddedClips){
+  normalizeAndAdd(root);
+  mixer = new THREE.AnimationMixer(currentObject);
+  resetClips();
+  if(embeddedClips && embeddedClips.length) addClips(embeddedClips, 'Embedded');
+}
+
+function buildPlaceholder(){
+  const geo = new THREE.IcosahedronGeometry(1.1, 1);
+  const mat = new THREE.MeshStandardMaterial({ color:0x0d1420, metalness:0.3, roughness:0.4, flatShading:true });
+  const mesh = new THREE.Mesh(geo, mat);
+  finalizeModel(mesh, []);
+  setStatus('Showing default placeholder — upload a model to replace it.');
+}
+
+function setStatus(msg, isError){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.classList.toggle('error', !!isError);
+}
+
+const gltfLoader = new GLTFLoader();
+const fbxLoader = new FBXLoader();
+
+function loadCharacterFromURL(url, isBlob, filename){
+  setStatus('Loading model…');
+  const ext = (filename || url).split('.').pop().toLowerCase().split('?')[0];
+  const done = (root, animations)=>{
+    finalizeModel(root, animations);
+    setStatus('Model loaded' + (animations && animations.length ? ' — ' + animations.length + ' embedded animation(s).' : '.'));
+    if(isBlob) URL.revokeObjectURL(url);
+  };
+  const fail = err=>{
+    console.error(err);
+    setStatus('Could not load that file. Showing placeholder instead.', true);
+    buildPlaceholder();
+    if(isBlob) URL.revokeObjectURL(url);
+  };
+  if(ext === 'fbx'){
+    fbxLoader.load(url, obj=> done(obj, obj.animations), undefined, fail);
+  } else {
+    gltfLoader.load(url, gltf=> done(gltf.scene, gltf.animations), undefined, fail);
+  }
+}
+
+function loadAnimationFromURL(url, filename){
+  setAnimStatus('Loading "' + filename + '"…');
+  fbxLoader.load(
+    url,
+    obj=>{
+      if(obj.animations && obj.animations.length){
+        addClips(obj.animations, filename.replace(/\.fbx$/i, ''));
+      } else {
+        setAnimStatus('No animation clips found in "' + filename + '".', true);
+      }
+      URL.revokeObjectURL(url);
+    },
+    undefined,
+    err=>{
+      console.error(err);
+      setAnimStatus('Could not read "' + filename + '".', true);
+      URL.revokeObjectURL(url);
+    }
+  );
+}
+
+buildPlaceholder();
+
+/* ---------------- Four renderers sharing one scene/camera ---------------- */
+const canvases = {
+  top: document.getElementById('cv-top'),
+  bottom: document.getElementById('cv-bottom'),
+  left: document.getElementById('cv-left'),
+  right: document.getElementById('cv-right'),
+};
+const renderers = {};
+Object.entries(canvases).forEach(([k, cv])=>{
+  const r = new THREE.WebGLRenderer({ canvas:cv, antialias:true, alpha:true });
+  r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  r.setClearColor(0x000000, 0);
+  renderers[k] = r;
+});
+
+function resizeRenderers(){
+  const rectSize = canvases.top.parentElement.parentElement.clientWidth / 3;
+  const s = Math.max(64, Math.floor(rectSize));
+  Object.values(renderers).forEach(r=> r.setSize(s, s, false));
+}
+window.addEventListener('resize', resizeRenderers);
+resizeRenderers();
+
+/* ---------------- Animation loop ---------------- */
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if(mixer) mixer.update(dt);
+  modelPivot.rotation.y += state.speed * dt;
+  tiltGroup.rotation.x = THREE.MathUtils.degToRad(state.tiltDeg);
+  modelPivot.scale.setScalar(state.scale);
+
+  Object.values(renderers).forEach(r => r.render(scene, camera));
+}
+animate();
+
+/* ---------------- UI wiring ---------------- */
+const $ = id => document.getElementById(id);
+
+$('speed').addEventListener('input', e=>{ state.speed = parseFloat(e.target.value); $('speedVal').textContent = state.speed.toFixed(2); });
+$('tilt').addEventListener('input', e=>{ state.tiltDeg = parseFloat(e.target.value); $('tiltVal').textContent = state.tiltDeg + '°'; });
+$('scale').addEventListener('input', e=>{ state.scale = parseFloat(e.target.value); $('scaleVal').textContent = state.scale.toFixed(2); });
+$('glow').addEventListener('input', e=>{ state.glow = parseFloat(e.target.value); $('glowVal').textContent = state.glow.toFixed(2); applyMaterialMode(); });
+$('wireToggle').addEventListener('change', e=>{ state.wireframe = e.target.checked; applyMaterialMode(); });
+$('colorA').addEventListener('input', e=>{ state.colorA.set(e.target.value); applyMaterialMode(); });
+$('colorB').addEventListener('input', e=>{ state.colorB.set(e.target.value); applyMaterialMode(); });
+$('guideToggle').addEventListener('change', e=>{ $('guide').style.display = e.target.checked ? 'flex' : 'none'; });
+
+$('uploadBtn').addEventListener('click', ()=> $('fileInput').click());
+$('fileInput').addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const url = URL.createObjectURL(file);
+  loadCharacterFromURL(url, true, file.name);
+  e.target.value = '';
+});
+
+$('sampleBtn').addEventListener('click', ()=>{
+  loadCharacterFromURL('https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models@main/2.0/Fox/glTF-Binary/Fox.glb', false, 'Fox.glb');
+});
+
+$('resetBtn').addEventListener('click', buildPlaceholder);
+
+$('clipSelect').addEventListener('change', e=> playClip(e.target.value));
+$('playToggle').addEventListener('change', e=>{ if(currentAction) currentAction.paused = !e.target.checked; });
+$('animSpeed').addEventListener('input', e=>{
+  animSpeed = parseFloat(e.target.value);
+  $('animSpeedVal').textContent = animSpeed.toFixed(2);
+  if(currentAction) currentAction.timeScale = animSpeed;
+});
+$('animUploadBtn').addEventListener('click', ()=> $('animFileInput').click());
+$('animFileInput').addEventListener('change', e=>{
+  Array.from(e.target.files).forEach(file=>{
+    const url = URL.createObjectURL(file);
+    loadAnimationFromURL(url, file.name);
+  });
+  e.target.value = '';
+});
+
+const dock = $('dock');
+$('dockToggle').addEventListener('click', ()=> dock.classList.toggle('collapsed'));
+
+$('fsBtn').addEventListener('click', async ()=>{
+  const stageWrap = document.querySelector('.stage-wrap');
+  try{
+    if(!document.fullscreenElement){
+      await stageWrap.requestFullscreen();
+      dock.classList.add('collapsed');
+      document.body.classList.add('fullscreen-active');
+    } else {
+      await document.exitFullscreen();
+    }
+  }catch(err){ console.warn('Fullscreen not available:', err); }
+});
+document.addEventListener('fullscreenchange', ()=>{
+  if(!document.fullscreenElement) document.body.classList.remove('fullscreen-active');
+});
+</script>
+</body>
+</html>
